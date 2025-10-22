@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    volumes:
+      - ./backend/app:/app
+    ports:
+      - "8000:8000"
+    environment:
+      - ENV_FILE=.env
+    depends_on:
+      - db
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    volumes:
+      - ./frontend/src:/app/src
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+  db:
+    image: postgres:latest
+    environment:
+      POSTGRES_DB: translation_db
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+volumes:
+  db_data:
