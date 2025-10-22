@@ -16,11 +16,13 @@ class TranslationProcessor:
         self,
         azure_translator: AzureTranslator,
         openrouter_service: Optional[OpenRouterService] = None,
-        use_llm_enhancement: bool = False
+        use_llm_enhancement: bool = False,
+        default_llm_model: Optional[str] = None
     ):
         self.azure_translator = azure_translator
         self.openrouter_service = openrouter_service
         self.use_llm_enhancement = use_llm_enhancement and openrouter_service is not None
+        self.default_llm_model = default_llm_model or "anthropic/claude-3.5-sonnet"
         logger.info(f"Translation processor initialized (LLM enhancement: {self.use_llm_enhancement})")
 
     def translate_text(

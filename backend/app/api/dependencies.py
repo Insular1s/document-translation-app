@@ -33,5 +33,6 @@ def get_translation_processor() -> TranslationProcessor:
     return TranslationProcessor(
         azure_translator=get_azure_translator(),
         openrouter_service=get_openrouter_service(),
-        use_llm_enhancement=settings.USE_LLM_ENHANCEMENT
+        use_llm_enhancement=settings.USE_LLM_ENHANCEMENT,
+        default_llm_model=settings.DEFAULT_LLM_MODEL
     )
