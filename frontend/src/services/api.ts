@@ -47,10 +47,10 @@ export const getDocumentContent = async (filename: string) => {
   return response.data;
 };
 
-export const updateDocumentContent = async (filename: string, updates: Record<string, any>) => {
+export const updateDocumentContent = async (filename: string, edits: Array<{ id: string; text: string }>) => {
   const response = await api.post('/editor/update-content', {
     filename,
-    updates,
+    edits,
   });
   return response.data;
 };
