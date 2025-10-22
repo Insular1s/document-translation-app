@@ -88,78 +88,89 @@ async def save_translation_edits(request: BulkEditRequest):
 @router.get("/slide-preview/{filename}/{slide_number}")
 async def get_slide_preview(filename: str, slide_number: int):
     """
-    Generate a preview image of a specific slide with caching.
+    Generate a placeholder preview image (Aspose.Slides disabled due to ICU issues).
     
     Args:
         filename: Document filename
         slide_number: Slide number (0-indexed)
         
     Returns:
-        Image file of the slide
+        Placeholder image
     """
     from app.config import settings
     from pathlib import Path
     import io
-    from fastapi.responses import StreamingResponse, Response
-    import aspose.slides as slides
-    from PIL import Image
-    import hashlib
+    from fastapi.responses import Response
+    from PIL import Image, ImageDraw
     
     try:
         file_path = settings.OUTPUT_FOLDER / filename
         if not file_path.exists():
             raise HTTPException(status_code=404, detail="Document not found")
         
-        # Check file modification time for cache invalidation
+        # Check cache first
         file_mtime = file_path.stat().st_mtime
         cache_key = f"{filename}_{slide_number}_{file_mtime}"
         
-        # Check cache
         if cache_key in _slide_image_cache:
-            logger.debug(f"Serving cached image for {cache_key}")
+            logger.debug(f"Serving cached placeholder for {cache_key}")
             return Response(
                 content=_slide_image_cache[cache_key],
                 media_type="image/png",
                 headers={
-                    "Cache-Control": "public, max-age=3600",
+                    "Cache-Control": "public, max-age=86400",
                     "Content-Disposition": f"inline; filename=slide_{slide_number}.png"
                 }
             )
         
-        # Generate image
-        with slides.Presentation(str(file_path)) as prs:
-            if slide_number < 0 or slide_number >= len(prs.slides):
-                raise HTTPException(status_code=400, detail="Invalid slide number")
-            
-            slide = prs.slides[slide_number]
-            
-            # Convert slide to image with better quality
-            scale = 2.0
-            with slide.get_image(scale, scale) as img:
-                img_buffer = io.BytesIO()
-                img.save(img_buffer, slides.ImageFormat.PNG)
-                img_bytes = img_buffer.getvalue()
-                
-                # Cache the image
-                _slide_image_cache[cache_key] = img_bytes
-                # Limit cache size (keep only last 20 images)
-                if len(_slide_image_cache) > 20:
-                    oldest_key = next(iter(_slide_image_cache))
-                    del _slide_image_cache[oldest_key]
-                
-                return Response(
-                    content=img_bytes,
-                    media_type="image/png",
-                    headers={
-                        "Cache-Control": "public, max-age=3600",
-                        "Content-Disposition": f"inline; filename=slide_{slide_number}.png"
-                    }
-                )
+        # Create placeholder image
+        img = Image.new('RGB', (960, 720), color='#f8f9fa')
+        draw = ImageDraw.Draw(img)
+        
+        # Draw slide number and message
+        text_lines = [
+            f"Slide {slide_number + 1}",
+            "",
+            "Preview not available",
+            "",
+            "(Download file to see presentation)"
+        ]
+        
+        y_position = 280
+        for line in text_lines:
+            bbox = draw.textbbox((0, 0), line)
+            text_width = bbox[2] - bbox[0]
+            x_position = (960 - text_width) // 2
+            draw.text((x_position, y_position), line, fill='#666666')
+            y_position += 40
+        
+        # Draw border
+        draw.rectangle([(0, 0), (959, 719)], outline='#dee2e6', width=3)
+        
+        # Save to bytes
+        img_buffer = io.BytesIO()
+        img.save(img_buffer, format='PNG')
+        img_bytes = img_buffer.getvalue()
+        
+        # Cache the placeholder
+        _slide_image_cache[cache_key] = img_bytes
+        if len(_slide_image_cache) > 20:
+            oldest_key = next(iter(_slide_image_cache))
+            del _slide_image_cache[oldest_key]
+        
+        return Response(
+            content=img_bytes,
+            media_type="image/png",
+            headers={
+                "Cache-Control": "public, max-age=86400",
+                "Content-Disposition": f"inline; filename=slide_{slide_number}.png"
+            }
+        )
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error generating slide preview: {e}")
+        logger.error(f"Error generating placeholder: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to generate preview: {str(e)}")
 
 
