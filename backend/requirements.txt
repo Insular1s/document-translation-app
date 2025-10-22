@@ -8,4 +8,4 @@ pydantic==2.9.2
 pydantic-settings==2.6.0
 aiofiles==24.1.0
 Pillow==10.4.0
-aspose-slides==24.8.0
+aspose-slides==25.10.0
