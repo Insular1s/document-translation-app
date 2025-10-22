@@ -24,11 +24,13 @@ class DocumentTranslationRequest(BaseModel):
 class DocumentTranslationResponse(BaseModel):
     """Response model for document translation."""
     success: bool = Field(..., description="Whether translation was successful")
+    filename: str = Field(..., description="Original filename")
     output_filename: str = Field(..., description="Translated document filename")
-    output_path: str = Field(..., description="Path to translated document")
     slides_translated: int = Field(..., description="Number of slides translated")
     text_frames_translated: int = Field(..., description="Number of text frames translated")
     target_language: str = Field(..., description="Target language used")
+    use_llm: bool = Field(..., description="Whether LLM enhancement was used")
+    llm_model: Optional[str] = Field(None, description="LLM model used")
     error: Optional[str] = Field(None, description="Error message if translation failed")
 
 

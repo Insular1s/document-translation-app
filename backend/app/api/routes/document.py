@@ -98,7 +98,7 @@ async def upload_document(file: UploadFile = File(...)):
 
 @router.post("/translate", response_model=DocumentTranslationResponse)
 async def translate_document(
-    filename: str = Form(...),
+    file: UploadFile = File(...),
     target_language: str = Form(...),
     source_language: Optional[str] = Form(None),
     use_llm: bool = Form(False),
@@ -107,10 +107,10 @@ async def translate_document(
     processor: TranslationProcessor = Depends(get_translation_processor)
 ):
     """
-    Translate an uploaded PPTX document.
+    Translate a PPTX document (upload and translate in one step).
     
     Args:
-        filename: Name of uploaded file
+        file: PPTX file to translate
         target_language: Target language code
         source_language: Source language code (optional)
         use_llm: Whether to use LLM enhancement
@@ -122,13 +122,31 @@ async def translate_document(
         Translation result with output file details
     """
     try:
-        # Check if file exists
-        input_path = settings.UPLOAD_FOLDER / filename
-        if not input_path.exists():
-            raise HTTPException(status_code=404, detail="File not found")
+        # Validate file extension
+        if not file.filename.endswith('.pptx'):
+            raise HTTPException(
+                status_code=400,
+                detail="Only PPTX files are supported"
+            )
+        
+        # Save uploaded file
+        input_path = settings.UPLOAD_FOLDER / file.filename
+        with open(input_path, "wb") as buffer:
+            content = await file.read()
+            
+            # Check size
+            if len(content) > settings.MAX_UPLOAD_SIZE:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"File size exceeds maximum allowed size of {settings.MAX_UPLOAD_SIZE / (1024*1024)}MB"
+                )
+            
+            buffer.write(content)
+        
+        logger.info(f"File uploaded for translation: {file.filename}")
         
         # Generate output filename
-        output_filename = generate_unique_filename(filename, target_language)
+        output_filename = generate_unique_filename(file.filename, target_language)
         output_path = settings.OUTPUT_FOLDER / output_filename
         
         # Create document processor
@@ -151,15 +169,17 @@ async def translate_document(
                 detail=result.get('error', 'Translation failed')
             )
         
-        logger.info(f"Document translated: {filename} -> {output_filename}")
+        logger.info(f"Document translated: {file.filename} -> {output_filename}")
         
         return DocumentTranslationResponse(
             success=True,
+            filename=file.filename,
             output_filename=output_filename,
-            output_path=str(output_path),
             slides_translated=result.get('slides_processed', 0),
             text_frames_translated=result.get('text_frames_translated', 0),
-            target_language=target_language
+            target_language=target_language,
+            use_llm=use_llm,
+            llm_model=llm_model
         )
     
     except HTTPException:
