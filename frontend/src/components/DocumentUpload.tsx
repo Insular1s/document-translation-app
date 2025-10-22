@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { uploadDocument, translateDocument } from '../services/api';
+import { translateDocument } from '../services/api';
 import type { DocumentTranslationResponse } from '../types';
 
 interface DocumentUploadProps {
@@ -65,25 +65,19 @@ function DocumentUpload({
     }
 
     try {
-      // Upload file
-      setUploadProgress('Uploading document...');
-      const uploadResponse = await uploadDocument(file);
-      
-      if (!uploadResponse.success) {
-        throw new Error(uploadResponse.error || 'Upload failed');
-      }
-
-      // Start translation
       setUploadProgress('Translating document...');
       onTranslationStart('Translating document...');
 
-      const translationResponse = await translateDocument({
-        filename: uploadResponse.filename,
-        target_language: targetLanguage,
-        use_llm: useLLM,
-        llm_model: llmModel,
-        preserve_formatting: true,
-      });
+      const translationResponse = await translateDocument(
+        file,
+        targetLanguage,
+        useLLM,
+        llmModel
+      );
+
+      if (!translationResponse.success) {
+        throw new Error(translationResponse.error || 'Translation failed');
+      }
 
       setUploadProgress('Translation complete!');
       onTranslationComplete(translationResponse);

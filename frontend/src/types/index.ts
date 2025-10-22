@@ -18,15 +18,13 @@ export interface DocumentUploadResponse {
 
 export interface DocumentTranslationResponse {
   success: boolean;
+  filename: string;
   output_filename: string;
-  output_path: string;
+  target_language: string;
   slides_translated: number;
   text_frames_translated: number;
-  target_language: string;
-  original_filename?: string;
-  status?: string;
-  total_texts_translated?: number;
-  processing_time?: number;
+  use_llm: boolean;
+  llm_model?: string;
   message?: string;
   error?: string;
 }
@@ -91,4 +89,10 @@ export interface DocumentContentResponse {
   total_slides: number;
   slides: SlideContent[];
   error?: string;
+}
+
+export interface DocumentContent {
+  filename: string;
+  slides: SlideContent[];
+  total_slides: number;
 }
