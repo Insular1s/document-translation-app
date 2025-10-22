@@ -44,8 +44,12 @@ class Config:
     CORS_ORIGINS: list = [
         "http://localhost:5173",
         "http://localhost:3000",
-        os.getenv("FRONTEND_URL", "")
+        "https://document-translation-app-db8x.vercel.app"
     ]
+    
+    # Add frontend URL from environment if provided
+    if os.getenv("FRONTEND_URL"):
+        CORS_ORIGINS.append(os.getenv("FRONTEND_URL"))
 
     @staticmethod
     def get_supported_languages():
