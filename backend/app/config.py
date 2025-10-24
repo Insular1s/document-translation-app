@@ -13,6 +13,10 @@ class Config:
     AZURE_TRANSLATOR_KEY: str = os.getenv("AZURE_TRANSLATOR_KEY", "")  # REMOVED hardcoded key
     AZURE_TRANSLATOR_REGION: str = os.getenv("AZURE_TRANSLATOR_REGION", "japaneast")
     
+    # Azure Computer Vision settings (for OCR)
+    AZURE_VISION_ENDPOINT: str = os.getenv("AZURE_VISION_ENDPOINT", "")
+    AZURE_VISION_KEY: str = os.getenv("AZURE_VISION_KEY", "")
+    
     # OpenRouter settings
     OPENROUTER_API_URL: str = os.getenv("OPENROUTER_API_URL", "https://openrouter.ai/api/v1/chat/completions")
     OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")  # REMOVED hardcoded key
@@ -31,6 +35,9 @@ class Config:
     SUPPORTED_LANGUAGES: list = ["en", "id", "ja", "fr", "de", "es", "zh", "ko"]
     DEFAULT_LLM_MODEL: str = "anthropic/claude-3.5-sonnet"
     USE_LLM_ENHANCEMENT: bool = os.getenv("USE_LLM_ENHANCEMENT", "true").lower() == "true"
+    TRANSLATE_IMAGES: bool = os.getenv("TRANSLATE_IMAGES", "true").lower() == "true"  # Enable/disable image translation
+    TRANSLATION_RETRY_ATTEMPTS: int = int(os.getenv("TRANSLATION_RETRY_ATTEMPTS", "3"))  # Number of retry attempts for failed translations
+    TRANSLATION_RETRY_DELAY: float = float(os.getenv("TRANSLATION_RETRY_DELAY", "1.0"))  # Initial retry delay in seconds
     
     # Available LLM models for translation
     AVAILABLE_LLM_MODELS: dict = {

@@ -7,8 +7,10 @@ A powerful web application for translating PowerPoint presentations using Azure 
 - 📄 **PPTX Document Translation**: Upload and translate PowerPoint presentations
 - 🌍 **Multiple Languages**: Support for 20+ languages including English, Spanish, French, German, Japanese, Chinese, and more
 - 🤖 **LLM Enhancement**: Optional AI-powered translation refinement using Claude 3.5 Sonnet via OpenRouter
+- 🖼️ **Image Text Translation**: OCR-based translation of text embedded in images (optional, requires Azure Computer Vision)
 - 🎨 **Formatting Preservation**: Maintains original document formatting, fonts, and styles
 - 📊 **Batch Processing**: Translates all slides, text frames, and tables in one go
+- ⚡ **Smart Detection**: Automatically skips text already in target language for faster processing
 - 🚀 **Modern UI**: Beautiful, responsive interface with drag-and-drop file upload
 
 ## Tech Stack

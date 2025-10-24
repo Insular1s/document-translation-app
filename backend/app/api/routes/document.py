@@ -9,7 +9,7 @@ from typing import Optional
 from app.config import settings
 from app.services.document_processor import DocumentProcessor
 from app.services.translation_processor import TranslationProcessor
-from app.api.dependencies import get_translation_processor
+from app.api.dependencies import get_translation_processor, get_document_processor
 from app.models.document import (
     DocumentUploadResponse,
     DocumentTranslationRequest,
@@ -104,7 +104,7 @@ async def translate_document(
     use_llm: bool = Form(False),
     llm_model: Optional[str] = Form(None),
     preserve_formatting: bool = Form(True),
-    processor: TranslationProcessor = Depends(get_translation_processor)
+    doc_processor: DocumentProcessor = Depends(get_document_processor)
 ):
     """
     Translate a PPTX document (upload and translate in one step).
@@ -116,7 +116,7 @@ async def translate_document(
         use_llm: Whether to use LLM enhancement
         llm_model: LLM model to use (optional, defaults to Claude 3.5 Sonnet)
         preserve_formatting: Whether to preserve formatting
-        processor: Translation processor instance
+        doc_processor: Document processor instance (includes image translation)
         
     Returns:
         Translation result with output file details
@@ -149,10 +149,7 @@ async def translate_document(
         output_filename = generate_unique_filename(file.filename, target_language)
         output_path = settings.OUTPUT_FOLDER / output_filename
         
-        # Create document processor
-        doc_processor = DocumentProcessor(processor)
-        
-        # Process document
+        # Process document (now includes image translation)
         result = doc_processor.process_pptx(
             input_path=input_path,
             output_path=output_path,

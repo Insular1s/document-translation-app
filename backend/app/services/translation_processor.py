@@ -1,5 +1,6 @@
 from typing import Any, Dict, List, Optional
 import logging
+import time
 from .azure_translator import AzureTranslator
 from .openrouter_service import OpenRouterService
 
@@ -55,38 +56,76 @@ class TranslationProcessor:
                 'translation': ''
             }
         
-        # Always try Azure Translator first
-        azure_result = self.azure_translator.translate_text(text, target_language, source_language)
+        # Try translation with retry logic
+        max_retries = 3
+        retry_delay = 1  # seconds
         
-        # If LLM enhancement is enabled or forced, use OpenRouter
-        if (self.use_llm_enhancement or force_llm) and self.openrouter_service:
-            detected_lang = azure_result.get('detected_language', source_language)
-            llm_result = self.openrouter_service.translate_with_context(
-                text=text,
-                target_language=target_language,
-                source_language=detected_lang,
-                context=context,
-                model=llm_model or self.default_llm_model
-            )
-            
-            if llm_result.get('success'):
+        for attempt in range(max_retries):
+            try:
+                # Always try Azure Translator first (also does language detection)
+                azure_result = self.azure_translator.translate_text(text, target_language, source_language)
+                
+                # Check if source and target languages are the same
+                detected_lang = azure_result.get('detected_language', source_language)
+                if detected_lang and self._normalize_language_code(detected_lang) == self._normalize_language_code(target_language):
+                    logger.debug(f"Skipping translation: text is already in target language '{target_language}'")
+                    return {
+                        'success': True,
+                        'translation': text,  # Return original text unchanged
+                        'source_language': detected_lang,
+                        'target_language': target_language,
+                        'method': 'skipped',
+                        'skipped': True
+                    }
+                
+                # If LLM enhancement is enabled or forced, use OpenRouter
+                if (self.use_llm_enhancement or force_llm) and self.openrouter_service:
+                    llm_result = self.openrouter_service.translate_with_context(
+                        text=text,
+                        target_language=target_language,
+                        source_language=detected_lang,
+                        context=context,
+                        model=llm_model or self.default_llm_model
+                    )
+                    
+                    if llm_result.get('success'):
+                        return {
+                            'success': True,
+                            'translation': llm_result['translation'],
+                            'source_language': detected_lang,
+                            'target_language': target_language,
+                            'method': 'llm',
+                            'azure_translation': azure_result.get('translated_text')
+                        }
+                
+                # Return Azure translation
                 return {
                     'success': True,
-                    'translation': llm_result['translation'],
-                    'source_language': detected_lang,
+                    'translation': azure_result.get('translated_text', ''),
+                    'source_language': azure_result.get('detected_language'),
                     'target_language': target_language,
-                    'method': 'llm',
-                    'azure_translation': azure_result.get('translated_text')
+                    'method': 'azure'
                 }
-        
-        # Return Azure translation
-        return {
-            'success': True,
-            'translation': azure_result.get('translated_text', ''),
-            'source_language': azure_result.get('detected_language'),
-            'target_language': target_language,
-            'method': 'azure'
-        }
+                
+            except Exception as e:
+                logger.warning(f"Translation attempt {attempt + 1}/{max_retries} failed: {e}")
+                
+                if attempt < max_retries - 1:
+                    # Exponential backoff
+                    sleep_time = retry_delay * (2 ** attempt)
+                    logger.info(f"Retrying in {sleep_time} seconds...")
+                    time.sleep(sleep_time)
+                else:
+                    # Final attempt failed
+                    logger.error(f"Translation failed after {max_retries} attempts: {e}")
+                    return {
+                        'success': False,
+                        'error': str(e),
+                        'translation': text,  # Return original text as fallback
+                        'source_language': source_language,
+                        'target_language': target_language,
+                        'method': 'failed'
+                    }
 
     def batch_translate(
         self,
@@ -155,3 +194,36 @@ class TranslationProcessor:
         )
         
         return result
+    
+    def _normalize_language_code(self, lang_code: str) -> str:
+        """
+        Normalize language code for comparison.
+        
+        Args:
+            lang_code: Language code to normalize
+            
+        Returns:
+            Normalized language code (lowercase, base language only)
+        """
+        if not lang_code:
+            return ''
+        
+        # Convert to lowercase
+        lang = lang_code.lower().strip()
+        
+        # Handle language variants (zh-Hans -> zh, pt-BR -> pt, etc.)
+        if '-' in lang:
+            lang = lang.split('-')[0]
+        
+        # Handle underscores (zh_Hans -> zh)
+        if '_' in lang:
+            lang = lang.split('_')[0]
+        
+        # Map common aliases
+        lang_map = {
+            'in': 'id',  # Indonesian: 'in' (old) -> 'id' (ISO 639-1)
+            'iw': 'he',  # Hebrew: 'iw' (old) -> 'he'
+            'ji': 'yi',  # Yiddish: 'ji' (old) -> 'yi'
+        }
+        
+        return lang_map.get(lang, lang)

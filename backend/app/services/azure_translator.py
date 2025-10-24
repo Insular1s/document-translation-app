@@ -57,7 +57,8 @@ class AzureTranslator:
 
         if translations and 'translations' in translations[0]:
             translated_text = translations[0]['translations'][0]['text']
-            detected_language = translations[0]['detectedLanguage']['language']
+            detected_language = translations[0].get('detectedLanguage', {}).get('language', 'unknown')
+            
             return {
                 'translated_text': translated_text,
                 'detected_language': detected_language
