@@ -178,16 +178,34 @@ const TranslationEditor: React.FC<TranslationEditorProps> = ({ filename, onSaveC
                   <span className="edited-badge">✏️ Edited</span>
                 )}
               </div>
-              <textarea
-                value={editedContent[frame.id] || frame.text}
-                onChange={(e) => handleTextChange(frame.id, e.target.value)}
-                rows={Math.max(3, frame.text.split('\n').length + 1)}
-                className="edit-textarea"
-                placeholder="Enter translation..."
-              />
+              
+              {/* Show original text if available */}
+              {frame.original_text && (
+                <div className="original-text-box">
+                  <label className="original-label">📄 Original Text:</label>
+                  <div className="original-text-content">
+                    {frame.original_text}
+                  </div>
+                </div>
+              )}
+              
+              {/* Translation editor */}
+              <div className="translation-editor-box">
+                <label className="translation-label">
+                  {frame.original_text ? '🌐 Translated Text:' : 'Edit Text:'}
+                </label>
+                <textarea
+                  value={editedContent[frame.id] || frame.text}
+                  onChange={(e) => handleTextChange(frame.id, e.target.value)}
+                  rows={Math.max(3, frame.text.split('\n').length + 1)}
+                  className="edit-textarea"
+                  placeholder="Enter translation..."
+                />
+              </div>
+              
               {editedContent[frame.id] !== frame.text && (
                 <div className="change-indicator">
-                  <small>Original: {frame.text.substring(0, 50)}{frame.text.length > 50 && '...'}</small>
+                  <small>⚠️ Modified from original translation</small>
                 </div>
               )}
             </div>

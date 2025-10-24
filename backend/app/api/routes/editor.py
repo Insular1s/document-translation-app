@@ -183,16 +183,28 @@ async def get_document_content(filename: str):
         filename: Name of the translated document file
         
     Returns:
-        Document content with all slides and text frames
+        Document content with all slides and text frames (including original text)
     """
     from app.config import settings
     from pptx import Presentation
     from pathlib import Path
+    import json
     
     try:
         file_path = settings.OUTPUT_FOLDER / filename
         if not file_path.exists():
             raise HTTPException(status_code=404, detail="Document not found")
+        
+        # Load original texts from JSON file if it exists
+        original_texts_path = file_path.with_suffix('.original.json')
+        original_texts = {}
+        if original_texts_path.exists():
+            try:
+                with open(original_texts_path, 'r', encoding='utf-8') as f:
+                    original_texts = json.load(f)
+                logger.info(f"Loaded {len(original_texts)} original texts from {original_texts_path.name}")
+            except Exception as e:
+                logger.warning(f"Could not load original texts: {e}")
         
         prs = Presentation(file_path)
         slides_content = []
@@ -202,9 +214,11 @@ async def get_document_content(filename: str):
             
             for shape_idx, shape in enumerate(slide.shapes):
                 if shape.has_text_frame:
+                    frame_id = f'slide_{slide_idx}_shape_{shape_idx}'
                     text_frames.append({
-                        'id': f'slide_{slide_idx}_shape_{shape_idx}',
+                        'id': frame_id,
                         'text': shape.text_frame.text,
+                        'original_text': original_texts.get(frame_id, ''),  # Add original text
                         'shape_index': shape_idx
                     })
             

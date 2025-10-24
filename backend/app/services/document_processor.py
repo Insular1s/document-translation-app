@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 from pptx import Presentation
 from pptx.util import Pt
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,7 @@ class DocumentProcessor:
             translation_processor: An instance of the translation processor to handle translation logic.
         """
         self.translation_processor = translation_processor
+        self.original_texts = {}  # Store original texts for before/after comparison
         logger.info("DocumentProcessor initialized")
 
     def process_pptx(
@@ -71,6 +73,9 @@ class DocumentProcessor:
         }
 
         try:
+            # Reset original texts storage
+            self.original_texts = {}
+            
             # Load presentation
             prs = Presentation(input_path)
             
@@ -78,7 +83,7 @@ class DocumentProcessor:
             for slide_idx, slide in enumerate(prs.slides):
                 logger.info(f"Processing slide {slide_idx + 1}/{len(prs.slides)}")
                 
-                for shape in slide.shapes:
+                for shape_idx, shape in enumerate(slide.shapes):
                     # Process text frames
                     if shape.has_text_frame:
                         self._process_text_frame(
@@ -87,7 +92,9 @@ class DocumentProcessor:
                             source_language,
                             use_llm,
                             llm_model,
-                            preserve_formatting
+                            preserve_formatting,
+                            slide_idx,
+                            shape_idx
                         )
                         stats['text_frames_translated'] += 1
                     
@@ -107,6 +114,12 @@ class DocumentProcessor:
             # Save translated presentation
             prs.save(output_path)
             logger.info(f"Translated PPTX saved to: {output_path}")
+            
+            # Save original texts mapping to a JSON file
+            original_texts_path = output_path.with_suffix('.original.json')
+            with open(original_texts_path, 'w', encoding='utf-8') as f:
+                json.dump(self.original_texts, f, ensure_ascii=False, indent=2)
+            logger.info(f"Original texts saved to: {original_texts_path}")
             
             return {
                 'success': True,
@@ -128,13 +141,21 @@ class DocumentProcessor:
         source_language: Optional[str],
         use_llm: bool,
         llm_model: Optional[str],
-        preserve_formatting: bool
+        preserve_formatting: bool,
+        slide_idx: int = 0,
+        shape_idx: int = 0
     ):
         """Process a text frame and translate its content."""
         try:
             original_text = text_frame.text.strip()
             if not original_text:
                 return
+            
+            # Create unique ID for this text frame
+            frame_id = f'slide_{slide_idx}_shape_{shape_idx}'
+            
+            # Store original text
+            self.original_texts[frame_id] = original_text
             
             # Translate text
             result = self.translation_processor.translate_text(

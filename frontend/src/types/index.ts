@@ -75,6 +75,7 @@ export interface LLMModel {
 export interface TextFrame {
   id: string;
   text: string;
+  original_text?: string;  // Original text before translation
   shape_index: number;
 }
 
