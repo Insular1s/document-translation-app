@@ -5,7 +5,6 @@ import type { DocumentTranslationResponse } from '../types';
 interface DocumentUploadProps {
   targetLanguage: string;
   useLLM: boolean;
-  llmModel?: string;
   onTranslationStart: (message: string) => void;
   onTranslationComplete: (result: DocumentTranslationResponse) => void;
 }
@@ -13,7 +12,6 @@ interface DocumentUploadProps {
 function DocumentUpload({
   targetLanguage,
   useLLM,
-  llmModel,
   onTranslationStart,
   onTranslationComplete,
 }: DocumentUploadProps) {
@@ -71,8 +69,7 @@ function DocumentUpload({
       const translationResponse = await translateDocument(
         file,
         targetLanguage,
-        useLLM,
-        llmModel
+        useLLM
       );
 
       if (!translationResponse.success) {

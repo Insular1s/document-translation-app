@@ -13,25 +13,17 @@ const api = axios.create({
 
 
 
-export const getAvailableModels = async () => {
-  const response = await api.get('/document/models');
-  return response.data;
-};
-
 export const translateDocument = async (
   file: File,
   targetLanguage: string,
-  useLLM: boolean = false,
-  llmModel?: string
+  useLLM: boolean = false
 ): Promise<DocumentTranslationResponse> => {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('target_language', targetLanguage);
   formData.append('use_llm', String(useLLM));
   
-  if (llmModel) {
-    formData.append('llm_model', llmModel);
-  }
+  // Backend will use the default model (Claude 3.5 Sonnet)
 
   const response = await api.post('/document/translate', formData, {
     headers: {

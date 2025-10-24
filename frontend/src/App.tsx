@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import DocumentUpload from './components/DocumentUpload';
 import LanguageSelector from './components/LanguageSelector';
 import ProgressIndicator from './components/ProgressIndicator';
 import PreviewPanel from './components/PreviewPanel';
 import TranslationEditor from './components/TranslationEditor';
 import type { DocumentTranslationResponse } from './types';
-import { getAvailableModels } from './services/api';
 import './styles/main.css';
 
 const SUPPORTED_LANGUAGES = [
@@ -37,20 +36,8 @@ function App() {
   const [isTranslating, setIsTranslating] = useState(false);
   const [translatingMessage, setTranslatingMessage] = useState('');
   const [useLLM, setUseLLM] = useState(false);
-  const [selectedModel, setSelectedModel] = useState<string>('');
-  const [availableModels, setAvailableModels] = useState<Record<string, string>>({});
   const [showEditor, setShowEditor] = useState(false);
   const [showFinalPreview, setShowFinalPreview] = useState(false);
-
-  useEffect(() => {
-    // Fetch available models on mount
-    getAvailableModels().then((data) => {
-      setAvailableModels(data.models);
-      setSelectedModel(data.default);
-    }).catch((error) => {
-      console.error('Failed to fetch models:', error);
-    });
-  }, []);
 
   const handleTranslationComplete = (result: DocumentTranslationResponse) => {
     setTranslationResult(result);
@@ -107,26 +94,9 @@ function App() {
                 checked={useLLM}
                 onChange={(e) => setUseLLM(e.target.checked)}
               />
-              <span>Use LLM Enhancement</span>
+              <span>Use LLM Enhancement (Claude 3.5 Sonnet)</span>
             </label>
           </div>
-
-          {useLLM && Object.keys(availableModels).length > 0 && (
-            <div className="model-selector">
-              <label htmlFor="model-select">AI Model:</label>
-              <select
-                id="model-select"
-                value={selectedModel}
-                onChange={(e) => setSelectedModel(e.target.value)}
-              >
-                {Object.entries(availableModels).map(([id, name]) => (
-                  <option key={id} value={id}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
         </div>
 
         {isTranslating && <ProgressIndicator message={translatingMessage} />}
@@ -135,7 +105,6 @@ function App() {
           <DocumentUpload
             targetLanguage={targetLanguage}
             useLLM={useLLM}
-            llmModel={selectedModel}
             onTranslationStart={handleTranslationStart}
             onTranslationComplete={handleTranslationComplete}
           />
