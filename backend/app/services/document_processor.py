@@ -410,23 +410,49 @@ class DocumentProcessor:
             
             if translated_image_bytes:
                 # Replace the image in the slide
-                # Get shape properties
+                # Preserve ALL shape properties for accurate positioning
                 left = shape.left
                 top = shape.top
                 width = shape.width
                 height = shape.height
                 
-                # Remove old shape
-                sp = shape.element
-                sp.getparent().remove(sp)
+                # Also preserve rotation if it exists
+                rotation = 0
+                try:
+                    rotation = shape.rotation
+                except:
+                    pass
                 
-                # Add new image with translated text
+                # Get the shape's position in the z-order (layer ordering)
+                shape_element = shape.element
+                parent = shape_element.getparent()
+                shape_index = list(parent).index(shape_element)
+                
+                # Remove old shape
+                parent.remove(shape_element)
+                
+                # Add new image with translated text AT THE EXACT SAME POSITION
                 pic = slide.shapes.add_picture(
                     io.BytesIO(translated_image_bytes),
                     left, top, width, height
                 )
                 
-                logger.info("Image successfully translated and replaced")
+                # Restore rotation if it existed
+                if rotation != 0:
+                    try:
+                        pic.rotation = rotation
+                    except:
+                        pass
+                
+                # Try to restore the z-order position
+                try:
+                    pic_element = pic.element
+                    parent.remove(pic_element)
+                    parent.insert(shape_index, pic_element)
+                except:
+                    pass  # If z-order restoration fails, at least we have the image
+                
+                logger.info(f"Image successfully translated and replaced (position: {left}, {top}, size: {width}x{height}, rotation: {rotation})")
                 return True
             else:
                 logger.info("No text found in image or translation skipped")
@@ -450,10 +476,28 @@ class DocumentProcessor:
                 first_para = text_frame.paragraphs[0]
                 if first_para.runs:
                     first_run = first_para.runs[0]
+                    
+                    # Preserve font properties
                     font_size = first_run.font.size
                     font_name = first_run.font.name
                     font_bold = first_run.font.bold
                     font_italic = first_run.font.italic
+                    font_underline = first_run.font.underline
+                    
+                    # Preserve font color (RGB or theme color)
+                    font_color_rgb = None
+                    font_color_theme = None
+                    
+                    try:
+                        if first_run.font.color.type == 1:  # MSO_COLOR_TYPE.RGB
+                            font_color_rgb = first_run.font.color.rgb
+                        elif first_run.font.color.type == 2:  # MSO_COLOR_TYPE.SCHEME
+                            font_color_theme = first_run.font.color.theme_color
+                    except Exception as color_error:
+                        logger.debug(f"Could not preserve font color: {color_error}")
+                    
+                    # Preserve paragraph alignment
+                    para_alignment = first_para.alignment
                     
                     # Clear and replace
                     text_frame.clear()
@@ -470,6 +514,21 @@ class DocumentProcessor:
                         run.font.bold = font_bold
                     if font_italic is not None:
                         run.font.italic = font_italic
+                    if font_underline is not None:
+                        run.font.underline = font_underline
+                    
+                    # Apply preserved font color
+                    try:
+                        if font_color_rgb:
+                            run.font.color.rgb = font_color_rgb
+                        elif font_color_theme is not None:
+                            run.font.color.theme_color = font_color_theme
+                    except Exception as color_error:
+                        logger.debug(f"Could not apply font color: {color_error}")
+                    
+                    # Apply preserved paragraph alignment
+                    if para_alignment is not None:
+                        p.alignment = para_alignment
                 else:
                     text_frame.text = new_text
             else:

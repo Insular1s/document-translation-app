@@ -332,13 +332,19 @@ class ImageTranslator:
                 translated_text = block_data['translated']
                 bbox = block_data['bbox']
                 
-                # Draw a white rectangle over the original text
                 x, y, w, h = bbox
                 padding = 5
+                
+                # Sample colors from the original text region to preserve them
+                text_color, bg_color = self._sample_text_colors(image, bbox)
+                
+                logger.debug(f"Sampled colors - Text: {text_color}, Background: {bg_color}")
+                
+                # Draw a rectangle with the detected background color over the original text
                 draw.rectangle(
                     [x - padding, y - padding, x + w + padding, y + h + padding],
-                    fill='white',
-                    outline='white'
+                    fill=bg_color,
+                    outline=bg_color
                 )
                 
                 # Calculate font size to fit the bounding box
@@ -352,24 +358,222 @@ class ImageTranslator:
                         except:
                             font = ImageFont.load_default()
                 
-                # Draw the translated text
+                # Draw the translated text with the detected text color
                 draw.text(
                     (x, y),
                     translated_text,
-                    fill='black',
+                    fill=text_color,
                     font=font
                 )
             
             logger.info(f"Drew {len(blocks_to_translate)} translated text blocks on image")
             
-            # Convert back to bytes
+            # Convert back to bytes, preserving original format when possible
             output_buffer = io.BytesIO()
-            translated_image.save(output_buffer, format='PNG')
+            
+            # Determine output format based on original content type
+            save_format = 'PNG'  # Default to PNG
+            if content_type in ['image/jpeg', 'image/jpg']:
+                save_format = 'JPEG'
+            elif content_type == 'image/png':
+                save_format = 'PNG'
+            
+            # Save with appropriate format
+            if save_format == 'JPEG':
+                # JPEG doesn't support transparency, ensure RGB mode
+                if translated_image.mode == 'RGBA':
+                    # Create white background
+                    rgb_image = Image.new('RGB', translated_image.size, (255, 255, 255))
+                    rgb_image.paste(translated_image, mask=translated_image.split()[3] if len(translated_image.split()) == 4 else None)
+                    rgb_image.save(output_buffer, format='JPEG', quality=95)
+                else:
+                    translated_image.save(output_buffer, format='JPEG', quality=95)
+            else:
+                # PNG format (supports transparency)
+                translated_image.save(output_buffer, format='PNG', optimize=True)
+            
+            logger.info(f"Saved translated image as {save_format}")
             return output_buffer.getvalue()
             
         except Exception as e:
             logger.error(f"Error translating image: {e}")
             return None
+    
+    def _sample_text_colors(self, image: Image.Image, bbox: list) -> tuple:
+        """
+        Sample text and background colors from a bounding box region.
+        
+        Uses smart heuristics to detect text color (preferring black/white/dark colors)
+        and preserve background/highlight colors accurately.
+        
+        Args:
+            image: PIL Image object
+            bbox: Bounding box [x, y, width, height]
+            
+        Returns:
+            Tuple of (text_color, bg_color) as RGB tuples
+        """
+        try:
+            from collections import Counter
+            
+            x, y, w, h = bbox
+            
+            # Ensure coordinates are within image bounds
+            img_width, img_height = image.size
+            x = max(0, min(x, img_width - 1))
+            y = max(0, min(y, img_height - 1))
+            x2 = max(x + 1, min(x + w, img_width))
+            y2 = max(y + 1, min(y + h, img_height))
+            
+            # Crop the region
+            region = image.crop((x, y, x2, y2))
+            
+            # Convert to RGB if needed
+            if region.mode != 'RGB':
+                region = region.convert('RGB')
+            
+            # Get all pixels
+            pixels = list(region.getdata())
+            
+            if not pixels:
+                return ((0, 0, 0), (255, 255, 255))  # Black on white fallback
+            
+            # Count color frequencies
+            color_counter = Counter(pixels)
+            
+            # Find background (most common color)
+            bg_color = color_counter.most_common(1)[0][0]
+            bg_brightness = sum(bg_color) / 3
+            
+            # NEW APPROACH: Look for pure black or white pixels DIRECTLY
+            # These are the actual text colors, not anti-aliased edges
+            
+            # Count black-ish pixels (very dark)
+            black_threshold = 30  # RGB sum < 30 is basically black
+            black_count = sum(count for color, count in color_counter.items() 
+                            if sum(color) <= black_threshold)
+            
+            # Count white-ish pixels (very light)
+            white_threshold = 735  # RGB sum > 735 is basically white (max is 765)
+            white_count = sum(count for color, count in color_counter.items() 
+                            if sum(color) >= white_threshold)
+            
+            # Count very dark pixels (dark gray, almost black)
+            dark_threshold = 100
+            dark_count = sum(count for color, count in color_counter.items() 
+                           if black_threshold < sum(color) <= dark_threshold)
+            
+            logger.debug(f"Color analysis - BG: {bg_color} (brightness: {bg_brightness:.1f}), "
+                        f"Black pixels: {black_count}, White pixels: {white_count}, Dark pixels: {dark_count}")
+            
+            # Decision logic based on actual pixel counts
+            if bg_brightness > 128:
+                # LIGHT background (white, yellow, cream, light gray, etc.)
+                # Text should be DARK or BLACK
+                
+                # If we found black pixels, use pure black
+                if black_count > 0:
+                    text_color = (0, 0, 0)
+                    logger.debug("Using BLACK text (found black pixels on light background)")
+                # If we found dark pixels, use dark gray or black
+                elif dark_count > 0:
+                    text_color = (0, 0, 0)  # Force to black even if slightly gray
+                    logger.debug("Using BLACK text (found dark pixels on light background)")
+                else:
+                    # No dark pixels found at all, force black anyway
+                    text_color = (0, 0, 0)
+                    logger.debug("Using BLACK text (default for light background)")
+            else:
+                # DARK background (black, navy, dark blue, etc.)
+                # Text should be LIGHT or WHITE
+                
+                # If we found white pixels, use pure white
+                if white_count > 0:
+                    text_color = (255, 255, 255)
+                    logger.debug("Using WHITE text (found white pixels on dark background)")
+                else:
+                    # No white pixels, force white anyway
+                    text_color = (255, 255, 255)
+                    logger.debug("Using WHITE text (default for dark background)")
+            
+            # Final safety check: ensure contrast
+            contrast = self._calculate_contrast(text_color, bg_color)
+            if contrast < 1.5:
+                # Very poor contrast, force opposite
+                logger.warning(f"Poor contrast ({contrast:.2f}), forcing opposite color")
+                if bg_brightness > 128:
+                    text_color = (0, 0, 0)
+                else:
+                    text_color = (255, 255, 255)
+            
+            logger.info(f"Final colors - Text: {text_color}, Background: {bg_color}, Contrast: {contrast:.2f}")
+            return (text_color, bg_color)
+            
+        except Exception as e:
+            logger.warning(f"Error sampling text colors: {e}, using defaults")
+            return ((0, 0, 0), (255, 255, 255))  # Black on white fallback
+    
+    def _color_distance(self, color1: tuple, color2: tuple) -> float:
+        """
+        Calculate Euclidean distance between two RGB colors.
+        
+        Args:
+            color1: First RGB tuple
+            color2: Second RGB tuple
+            
+        Returns:
+            Distance value
+        """
+        return ((color1[0] - color2[0])**2 + 
+                (color1[1] - color2[1])**2 + 
+                (color1[2] - color2[2])**2) ** 0.5
+    
+    def _get_contrasting_color(self, color: tuple) -> tuple:
+        """
+        Get a contrasting color for the given color.
+        
+        Args:
+            color: RGB tuple
+            
+        Returns:
+            Contrasting RGB tuple
+        """
+        # Calculate brightness
+        brightness = sum(color) / 3
+        
+        # Return black or white based on brightness
+        if brightness > 128:
+            return (0, 0, 0)  # Black for light backgrounds
+        else:
+            return (255, 255, 255)  # White for dark backgrounds
+    
+    def _calculate_contrast(self, color1: tuple, color2: tuple) -> float:
+        """
+        Calculate contrast ratio between two colors.
+        
+        Args:
+            color1: First RGB tuple
+            color2: Second RGB tuple
+            
+        Returns:
+            Contrast ratio (higher is better, minimum 1.0)
+        """
+        # Calculate relative luminance
+        def luminance(rgb):
+            r, g, b = [x / 255.0 for x in rgb]
+            r = r / 12.92 if r <= 0.03928 else ((r + 0.055) / 1.055) ** 2.4
+            g = g / 12.92 if g <= 0.03928 else ((g + 0.055) / 1.055) ** 2.4
+            b = b / 12.92 if b <= 0.03928 else ((b + 0.055) / 1.055) ** 2.4
+            return 0.2126 * r + 0.7152 * g + 0.0722 * b
+        
+        l1 = luminance(color1)
+        l2 = luminance(color2)
+        
+        # Calculate contrast ratio
+        lighter = max(l1, l2)
+        darker = min(l1, l2)
+        
+        return (lighter + 0.05) / (darker + 0.05)
     
     def _calculate_font_size(self, text: str, max_width: int, max_height: int, font) -> int:
         """
